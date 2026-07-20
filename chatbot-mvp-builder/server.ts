@@ -67,7 +67,7 @@ CRITICAL GUIDELINES:
       ];
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+model: "gemini-1.5-flash",
         contents: contents,
         config: {
           systemInstruction: systemInstruction,
@@ -113,7 +113,7 @@ Important Notes:
 `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+model: "gemini-1.5-flash",
         contents: prompt,
         config: {
           systemInstruction: "You are a professional customer experience designer and builder of high-conversion corporate FAQ lists. You write clean, direct, brand-aligned English questions and answers.",
