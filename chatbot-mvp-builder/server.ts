@@ -65,7 +65,7 @@ CRITICAL GUIDELINES:
       ];
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.0-flash",
         contents: contents,
         config: {
           systemInstruction: systemInstruction,
@@ -106,7 +106,7 @@ Please generate exactly 50 high-value FAQs, distributing them evenly with exactl
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.0-flash",
         contents: prompt,
         config: {
           systemInstruction: "You are a professional customer experience designer and builder of high-conversion corporate FAQ lists. You write clean, direct, brand-aligned English questions and answers.",
