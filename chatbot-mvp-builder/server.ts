@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import Groq from "groq-sdk";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -12,17 +12,12 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Initialize Gemini Client with standard headers
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
+  // Initialize Groq Client
+  const groq = new Groq({
+    apiKey: process.env.GROQ_API_KEY,
   });
 
-  // Endpoint to handle chat interaction with simulation
+  // Endpoint to handle chat interaction
   app.post("/api/chat", async (req, res) => {
     try {
       const { message, history, faqContext, businessInfo } = req.body;
@@ -31,7 +26,6 @@ async function startServer() {
         return res.status(400).json({ error: "Message is required" });
       }
 
-      // Convert FAQs array to readable format for system prompt
       const formattedFAQs = Array.isArray(faqContext) 
         ? faqContext.map((item: any, i: number) => `Q${i + 1}: ${item.question}\nA${i + 1}: ${item.answer}`).join("\n\n")
         : "No previous FAQs database available currently.";
@@ -49,38 +43,35 @@ ${formattedFAQs}
 CRITICAL GUIDELINES:
 1. Respond in English. Match the requested tone and style precisely.
 2. If the user asks a question that matches or is highly similar to one of the FAQs, answer it using the pre-defined FAQ answer. Keep it accurate and direct.
-3. If the user asks something outside the FAQ database, generate a logical and helpful response aligned with the business identity, location, and tone. Politely state that for specific pricing/details not covered, they can leave their contact details or keep the answer short.
+3. If the user asks something outside the FAQ database, generate a logical and helpful response aligned with the business identity, location, and tone.
 4. ABSOLUTE BREVITY: Keep your responses short, concise, and easy to read (1 to 3 sentences maximum).
       `;
 
-      const contents = [
+      const messages = [
+        { role: "system", content: systemInstruction },
         ...(Array.isArray(history) ? history.map((msg: any) => ({
-          role: msg.sender === "user" ? "user" : "model",
-          parts: [{ text: msg.text }]
+          role: msg.sender === "user" ? "user" : "assistant",
+          content: msg.text
         })) : []),
-        {
-          role: "user",
-          parts: [{ text: message }]
-        }
+        { role: "user", content: message }
       ];
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-lite",
-        contents: contents,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.7,
-        }
+      const completion = await groq.chat.completions.create({
+        messages: messages as any,
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.7,
+        max_tokens: 200,
       });
 
-      res.json({ reply: response.text || "I'm sorry, I couldn't quite understand that." });
+      const reply = completion.choices[0]?.message?.content || "I'm sorry, I couldn't process that.";
+      res.json({ reply });
     } catch (error: any) {
-      console.error("Gemini Chat API Error:", error);
+      console.error("Groq Chat API Error:", error);
       res.status(500).json({ error: error.message || "An error occurred during chat processing" });
     }
   });
 
-  // Endpoint to generate 50 custom questions and answers using Gemini API structured schema
+  // Endpoint to generate 50 custom questions and answers
   app.post("/api/generate-faq", async (req, res) => {
     try {
       const { name, type, city, tone, customPrompt } = req.body;
@@ -90,62 +81,46 @@ CRITICAL GUIDELINES:
       }
 
       const prompt = `
-Generate a complete, high-quality, smart set of exactly 50 customer FAQ items in English for:
+Generate a complete set of exactly 50 customer FAQ items in valid JSON format for:
 - Business Name: ${name || "Mujeeb Support"}
 - Industry/Type: ${type}
 - City: ${city}
 - Brand Tone: ${tone || "Casual & Friendly"}
-- Additional Context/Details: ${customPrompt || "None"}
+- Additional Details: ${customPrompt || "None"}
 
-Please generate exactly 50 high-value FAQs, distributing them evenly with exactly 10 items in each of the following 5 categories:
-1. "General & About"
-2. "Products & Services"
-3. "Pricing & Discounts"
-4. "Location & Hours"
-5. "Support & Policies"
+Requirements:
+Return ONLY a raw JSON Array of 50 objects without markdown formatting or code blocks.
+Each object must have:
+- "category": String (One of: "General & About", "Products & Services", "Pricing & Discounts", "Location & Hours", "Support & Policies")
+- "question": String
+- "answer": String (1-3 sentences)
+Distribution: 10 items per category.
       `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-lite",
-        contents: prompt,
-        config: {
-          systemInstruction: "You are a professional customer experience designer and builder of high-conversion corporate FAQ lists. You write clean, direct, brand-aligned English questions and answers.",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            description: "List of exactly 50 FAQ items distributed across the 5 categories (10 items per category)",
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                category: { 
-                  type: Type.STRING, 
-                  description: "Name of the category, must be one of the 5 listed above exactly" 
-                },
-                question: { 
-                  type: Type.STRING, 
-                  description: "Frequently asked question from a customer" 
-                },
-                answer: { 
-                  type: Type.STRING, 
-                  description: "Short, clear answer (1-3 sentences max) matching the tone and city" 
-                }
-              },
-              required: ["category", "question", "answer"]
-            }
-          },
-          temperature: 0.8,
-        }
+      const completion = await groq.chat.completions.create({
+        messages: [
+          { role: "system", content: "You output valid, raw JSON arrays only. Do not wrap in ```json blocks." },
+          { role: "user", content: prompt }
+        ],
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.7,
+        response_format: { type: "json_object" }
       });
 
-      const responseText = response.text;
-      if (!responseText) {
-        throw new Error("No valid response received from model");
+      const content = completion.choices[0]?.message?.content || "[]";
+      
+      // Parse JSON safely
+      let generatedFAQs;
+      try {
+        const parsed = JSON.parse(content);
+        generatedFAQs = Array.isArray(parsed) ? parsed : (parsed.faqs || parsed.items || []);
+      } catch {
+        generatedFAQs = [];
       }
 
-      const generatedFAQs = JSON.parse(responseText);
       res.json({ faqs: generatedFAQs });
     } catch (error: any) {
-      console.error("Gemini Generate FAQ API Error:", error);
+      console.error("Groq Generate FAQ API Error:", error);
       res.status(500).json({ error: error.message || "An error occurred while generating FAQs" });
     }
   });
