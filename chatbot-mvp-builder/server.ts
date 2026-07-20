@@ -8,7 +8,7 @@ dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   app.use(express.json());
 
@@ -44,16 +44,14 @@ You are an intelligent, friendly Customer Support Chatbot (MVP) representing:
 - Conversation Tone & Style: ${businessInfo?.tone || "Casual & Friendly"}
 
 Your knowledge base is strictly defined by the following Top Customer FAQ list:
----
 ${formattedFAQs}
----
 
 CRITICAL GUIDELINES:
-1. Respond in English. Match the requested tone and style precisely (e.g. professional and corporate for Formal B2B, or lively and youthful for Casual & Friendly).
+1. Respond in English. Match the requested tone and style precisely.
 2. If the user asks a question that matches or is highly similar to one of the FAQs, answer it using the pre-defined FAQ answer. Keep it accurate and direct.
-3. If the user asks something outside the FAQ database, generate a logical and helpful response aligned with the business identity, location, and tone. Politely state that for specific pricing/details not covered, they can leave their contact details or reach support, and keep the answer short.
-4. ABSOLUTE BREVITY: Keep your responses short, concise, and easy to read (1 to 3 sentences maximum, or 2-3 sentences). This mimics real WhatsApp Business quick replies. Avoid long walls of text.
-`;
+3. If the user asks something outside the FAQ database, generate a logical and helpful response aligned with the business identity, location, and tone. Politely state that for specific pricing/details not covered, they can leave their contact details or keep the answer short.
+4. ABSOLUTE BREVITY: Keep your responses short, concise, and easy to read (1 to 3 sentences maximum).
+      `;
 
       const contents = [
         ...(Array.isArray(history) ? history.map((msg: any) => ({
@@ -67,7 +65,7 @@ CRITICAL GUIDELINES:
       ];
 
       const response = await ai.models.generateContent({
-model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         contents: contents,
         config: {
           systemInstruction: systemInstruction,
@@ -100,20 +98,15 @@ Generate a complete, high-quality, smart set of exactly 50 customer FAQ items in
 - Additional Context/Details: ${customPrompt || "None"}
 
 Please generate exactly 50 high-value FAQs, distributing them evenly with exactly 10 items in each of the following 5 categories:
-1. "General & About" (Overview, concept, foundation, unique selling points in the city)
-2. "Products & Services" (Main items, signature services, custom orders, ingredients or details)
-3. "Pricing & Discounts" (Payment methods, pricing levels, special offers, student/corporate discounts)
-4. "Location & Hours" (Precise address or district in the city, operating hours, weekend/holiday hours)
-5. "Support & Policies" (Return/refund policy, filing feedback/complaints, human agent handoff details)
-
-Important Notes:
-- Keep the answers short, helpful, and concise (exactly 1 to 3 sentences each) as specified in the WhatsApp Business style.
-- Customize the questions and answers beautifully to the city (${city}) and industry context.
-- Return exactly 50 FAQ items total (10 items per category).
-`;
+1. "General & About"
+2. "Products & Services"
+3. "Pricing & Discounts"
+4. "Location & Hours"
+5. "Support & Policies"
+      `;
 
       const response = await ai.models.generateContent({
-model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           systemInstruction: "You are a professional customer experience designer and builder of high-conversion corporate FAQ lists. You write clean, direct, brand-aligned English questions and answers.",
@@ -175,7 +168,7 @@ model: "gemini-1.5-flash",
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
   });
 }
 
